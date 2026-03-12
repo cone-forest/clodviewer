@@ -1,0 +1,153 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-header {
+  padding: 1rem 1.5rem;
+  background: #1a1a2e;
+  color: #eee;
+  border-bottom: 1px solid #333;
+}
+
+.shell-header h1 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.shell-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-group label {
+  font-size: 0.875rem;
+  color: #aaa;
+}
+
+.control-group button,
+.control-group select {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 4px;
+  border: 1px solid #444;
+  background: #2a2a4e;
+  color: #eee;
+  cursor: pointer;
+}
+
+.control-group button:hover:not(:disabled) {
+  background: #3a3a5e;
+}
+
+.control-group button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.view-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.view-buttons button {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  border-radius: 4px;
+  border: 1px solid #444;
+  background: #2a2a4e;
+  color: #eee;
+  cursor: pointer;
+}
+
+.view-buttons button:hover:not(:disabled) {
+  background: #3a3a5e;
+}
+
+.view-buttons button.active {
+  background: #4a4a8e;
+  border-color: #6a6aae;
+}
+
+.view-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.comparison-load {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #333;
+}
+
+.shell-header .error {
+  margin: 0.5rem 0 0 0;
+  color: #e88;
+  font-size: 0.875rem;
+}
+
+.shell-main {
+  flex: 1;
+  padding: 1rem 1.5rem;
+  overflow: auto;
+}
+
+.placeholder {
+  color: #888;
+  text-align: center;
+  padding: 3rem;
+}
+
+.view-container {
+  width: 100%;
+  min-height: 400px;
+}
+
+.view-container h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.view-description {
+  margin: 0 0 0.75rem 0;
+  color: #aaa;
+  font-size: 0.875rem;
+}
+
+.view-container .error {
+  color: #e88;
+  margin: 0.5rem 0 0 0;
+}
+
+.view-comparison .comparison-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.view-comparison .panel {
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem;
+  background: #0f0f1a;
+}
+
+.view-comparison .panel h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+}
