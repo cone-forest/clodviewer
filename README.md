@@ -16,18 +16,6 @@ npm run dev
 
 Then open the URL shown (e.g. http://localhost:5173). Load a hierarchy JSON file produced by `clodexport`.
 
-## Build hierarchy JSON
-
-From the meshoptimizer repo root, build and run the export tool:
-
-```bash
-cmake -B build -DMESHOPT_BUILD_CLODEXPORT=ON
-cmake --build build --target clodexport
-./build/clodexport path/to/mesh.obj -o hierarchy.json
-```
-
-Use `--no-geometry` to omit mesh and cluster indices (smaller file; Comparison view and geometry-dependent views need geometry).
-
 ## Views
 
 - **DAG Structure View** — 2D graph of clusters and groups; nodes colored by boundary ratio (green = good, red = bad). Zoom with scroll, drag to pan.
