@@ -51,6 +51,16 @@
   margin-bottom: 0;
 }
 
+.dag-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.dag-stats-column {
+  flex: 1 1 260px;
+}
+
 .dag-stats-title {
   margin: 0 0 0.5rem 0;
   font-size: 0.95rem;
@@ -79,7 +89,6 @@
 
 .dag-histogram-wrap {
   width: 100%;
-  max-width: 480px;
 }
 
 .dag-histogram {

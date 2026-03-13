@@ -6,6 +6,15 @@ import './DagStructureView.css';
 const HISTOGRAM_BINS = 14;
 const HISTOGRAM_HEIGHT = 72;
 
+/** Link distance for cluster→group edges (compact). */
+const LINK_DISTANCE_CLUSTER_GROUP = 60;
+/** Link distance for group→group edges (more separation for readability). */
+const LINK_DISTANCE_GROUP_GROUP = 140;
+
+// Classic red→green color scale (shared by clusters and groups).
+const CLUSTER_COLORS_WARM = ['#7F0000', '#C00000', '#FF8000', '#A0FF00', '#008000'];
+const GROUP_COLORS_COOL = ['#7F0000', '#C00000', '#FF8000', '#A0FF00', '#008000'];
+
 interface DagNode {
   id: string;
   type: 'group' | 'cluster';
@@ -76,6 +85,10 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
     max: number;
     groupId?: number;
   } | null>(null);
+  const [groupHighlightRange, setGroupHighlightRange] = useState<{
+    min: number;
+    max: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -108,9 +121,30 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
     const depthToY = (depth: number) =>
       padding + (maxDepth - depth) * (maxDepth > 0 ? ySpan / maxDepth : 0);
 
+    // Aggregate boundary inner/outer per group so we can show sum(inner)/sum(outer) on group nodes.
+    const groupInnerSum = new Array(groups.length).fill(0);
+    const groupOuterSum = new Array(groups.length).fill(0);
+    clusters.forEach((c) => {
+      if (c.groupId >= 0 && c.groupId < groups.length) {
+        groupInnerSum[c.groupId] += c.boundaryInner ?? 0;
+        groupOuterSum[c.groupId] += c.boundaryOuter ?? 0;
+      }
+    });
+
     const nodes: DagNode[] = [];
     groups.forEach((_, i) => {
-      nodes.push({ id: `g${i}`, type: 'group', groupId: i, depth: groups[i].depth });
+      const inner = groupInnerSum[i];
+      const outer = groupOuterSum[i];
+      let ratio = 0;
+      if (outer > 0) ratio = inner / outer;
+      else if (inner > 0) ratio = Infinity;
+      nodes.push({
+        id: `g${i}`,
+        type: 'group',
+        groupId: i,
+        depth: groups[i].depth,
+        boundaryRatio: ratio,
+      });
     });
     clusters.forEach((c, i) => {
       const ratio = getBoundaryRatio(c);
@@ -146,20 +180,59 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
       }
     });
 
-    const ratioValues = nodes
-      .filter((n): n is DagNode & { boundaryRatio: number } => n.boundaryRatio != null)
+    // Build separate color scales for clusters and groups so they are visually distinct.
+    const clusterRatios = nodes
+      .filter((n): n is DagNode & { boundaryRatio: number } => n.type === 'cluster' && n.boundaryRatio != null)
       .map((n) => n.boundaryRatio);
-    const finiteRatios = ratioValues.filter((r) => Number.isFinite(r));
-    const minR = finiteRatios.length ? Math.min(...finiteRatios) : 0;
-    const maxR = finiteRatios.length ? Math.max(...finiteRatios) : 1;
-    const domainMax = minR === maxR ? minR + 1 : maxR;
-    const colorScale = d3
+    const groupRatios = nodes
+      .filter((n): n is DagNode & { boundaryRatio: number } => n.type === 'group' && n.boundaryRatio != null)
+      .map((n) => n.boundaryRatio);
+
+    const clusterFinite = clusterRatios.filter((r) => Number.isFinite(r));
+    const groupFinite = groupRatios.filter((r) => Number.isFinite(r));
+
+    const minCluster = clusterFinite.length ? Math.min(...clusterFinite) : 0;
+    const maxCluster = clusterFinite.length ? Math.max(...clusterFinite) : 1;
+    const domainMaxCluster = minCluster === maxCluster ? minCluster + 1 : maxCluster;
+    const spanCluster = domainMaxCluster - minCluster || 1;
+
+    const minGroup = groupFinite.length ? Math.min(...groupFinite) : 0;
+    const maxGroup = groupFinite.length ? Math.max(...groupFinite) : 1;
+    const domainMaxGroup = minGroup === maxGroup ? minGroup + 1 : maxGroup;
+    const spanGroup = domainMaxGroup - minGroup || 1;
+
+    const clusterDomain = CLUSTER_COLORS_WARM.map((_, i) =>
+      minCluster + (spanCluster * i) / Math.max(1, CLUSTER_COLORS_WARM.length - 1)
+    );
+    const groupDomain = GROUP_COLORS_COOL.map((_, i) =>
+      minGroup + (spanGroup * i) / Math.max(1, GROUP_COLORS_COOL.length - 1)
+    );
+
+    const clusterColorScale = d3
       .scaleLinear<string>()
-      .domain([minR, domainMax])
-      .range(['#c00', '#0a0'])
+      .domain(clusterDomain)
+      .range(CLUSTER_COLORS_WARM)
       .clamp(true);
-    const ratioToColor = (r: number) =>
-      r === Infinity ? '#0a0' : colorScale(Number.isFinite(r) ? r : minR);
+
+    const groupColorScale = d3
+      .scaleLinear<string>()
+      .domain(groupDomain)
+      .range(GROUP_COLORS_COOL)
+      .clamp(true);
+
+    const ratioToClusterColor = (r: number) => {
+      if (!clusterRatios.length) return CLUSTER_COLORS_WARM[0];
+      if (r === Infinity) return CLUSTER_COLORS_WARM[CLUSTER_COLORS_WARM.length - 1];
+      const value = Number.isFinite(r) ? r : minCluster;
+      return clusterColorScale(value);
+    };
+
+    const ratioToGroupColor = (r: number) => {
+      if (!groupRatios.length) return GROUP_COLORS_COOL[0];
+      if (r === Infinity) return GROUP_COLORS_COOL[GROUP_COLORS_COOL.length - 1];
+      const value = Number.isFinite(r) ? r : minGroup;
+      return groupColorScale(value);
+    };
 
     // Start with depth-ordered layout: low depth at bottom, high at top
     nodes.forEach((n) => {
@@ -169,7 +242,13 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
 
     const simulation = d3
       .forceSimulation<DagNode>(nodes)
-      .force('link', d3.forceLink<DagNode, DagLink>(links).id((d) => d.id).distance(60))
+      .force(
+        'link',
+        d3
+          .forceLink<DagNode, DagLink>(links)
+          .id((d) => d.id)
+          .distance((d) => (d.linkType === 'group-group' ? LINK_DISTANCE_GROUP_GROUP : LINK_DISTANCE_CLUSTER_GROUP))
+      )
       .force('charge', d3.forceManyBody().strength(-120))
       .force('x', d3.forceX(width / 2))
       .force('y', d3.forceY((d) => depthToY(d.depth)).strength(0.4))
@@ -191,23 +270,49 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
       .attr('stroke-opacity', (d) => (d.linkType === 'group-group' ? 0.8 : 0.6))
       .attr('stroke-width', (d) => (d.linkType === 'group-group' ? 1.5 : 1));
 
-    const node = g
+    const groupNodes = nodes.filter((n) => n.type === 'group');
+    const clusterNodes = nodes.filter((n) => n.type === 'cluster');
+
+    const groupNode = g
       .append('g')
-      .attr('class', 'nodes')
+      .attr('class', 'nodes groups')
+      .selectAll<SVGRectElement, DagNode>('rect')
+      .data(groupNodes)
+      .join('rect')
+      .attr('width', 12)
+      .attr('height', 12)
+      .attr('fill', (d) => (d.boundaryRatio != null ? ratioToGroupColor(d.boundaryRatio) : GROUP_COLORS_COOL[0]))
+      .attr('stroke', '#888')
+      .attr('stroke-width', 1.2)
+      .attr('cursor', 'pointer');
+
+    groupNode.append('title').text((d) => {
+      const depth = groups[d.groupId!].depth;
+      const inner = groupInnerSum[d.groupId!] ?? 0;
+      const outer = groupOuterSum[d.groupId!] ?? 0;
+      const r = d.boundaryRatio ?? 0;
+      const ratioLabel = r === Infinity ? '∞' : r.toFixed(4);
+      return `Group ${d.groupId}\ndepth ${depth}\nBoundary ratio (sum inner / sum outer): ${ratioLabel}\nInner sum: ${inner.toFixed(2)}\nOuter sum: ${outer.toFixed(2)}`;
+    });
+
+    groupNode.on('click', (_event, d) => {
+      if (d.groupId != null)
+        setSelectedGroupIdRef.current((prev) => (prev === d.groupId ? null : d.groupId));
+    });
+
+    const clusterNode = g
+      .append('g')
+      .attr('class', 'nodes clusters')
       .selectAll<SVGCircleElement, DagNode>('circle')
-      .data(nodes)
+      .data(clusterNodes)
       .join('circle')
-      .attr('r', (d) => (d.type === 'group' ? 6 : 5))
-      .attr('fill', (d) => (d.boundaryRatio != null ? ratioToColor(d.boundaryRatio) : '#666'))
-      .attr('stroke', (d) => (d.type === 'group' ? '#888' : '#333'))
+      .attr('r', 5)
+      .attr('fill', (d) => (d.boundaryRatio != null ? ratioToClusterColor(d.boundaryRatio) : CLUSTER_COLORS_WARM[0]))
+      .attr('stroke', '#333')
       .attr('stroke-width', 1)
       .attr('cursor', 'pointer');
 
-    node.append('title').text((d) => {
-      if (d.type === 'group') {
-        const depth = groups[d.groupId!].depth;
-        return `Group ${d.groupId}\ndepth ${depth}`;
-      }
+    clusterNode.append('title').text((d) => {
       const r = d.boundaryRatio ?? 0;
       const c = clusters[d.clusterIndex!];
       const inner = c.boundaryInner ?? 0;
@@ -217,18 +322,14 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
       return `Cluster ${d.clusterIndex}\nGroup ${c.groupId}, depth ${depth}\nBoundary ratio: ${ratioLabel}\nInner: ${inner.toFixed(2)}\nOuter: ${outer.toFixed(2)}`;
     });
 
-    node.on('click', (_event, d) => {
-      if (d.type === 'group' && d.groupId != null)
-        setSelectedGroupIdRef.current((prev) => (prev === d.groupId ? null : d.groupId));
-    });
-
     simulation.on('tick', () => {
       link
         .attr('x1', (d) => (d.source as DagNode).x!)
         .attr('y1', (d) => (d.source as DagNode).y!)
         .attr('x2', (d) => (d.target as DagNode).x!)
         .attr('y2', (d) => (d.target as DagNode).y!);
-      node.attr('cx', (d) => d.x!).attr('cy', (d) => d.y!);
+      groupNode.attr('x', (d) => d.x! - 6).attr('y', (d) => d.y! - 6);
+      clusterNode.attr('cx', (d) => d.x!).attr('cy', (d) => d.y!);
     });
 
     const zoom = d3
@@ -244,11 +345,29 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
     };
   }, [hierarchy, dimensions]);
 
-  // Highlight selected group node and bar-selected clusters when selection changes
+  // Highlight selected group node, its cluster nodes and edges, and bar-selected clusters when selection changes
   useEffect(() => {
     if (!svgRef.current || !hierarchy.groups.length) return;
     const clusters = hierarchy.clusters;
-    const circles = d3.select(svgRef.current).selectAll<SVGCircleElement, DagNode>('.nodes circle');
+    const groupRatios = hierarchy.groups.map((_, gId) => {
+      const groupClusters = clusters.filter((c) => c.groupId === gId);
+      if (!groupClusters.length) return 0;
+      let innerSum = 0;
+      let outerSum = 0;
+      for (const c of groupClusters) {
+        innerSum += c.boundaryInner ?? 0;
+        outerSum += c.boundaryOuter ?? 0;
+      }
+      if (outerSum > 0) return innerSum / outerSum;
+      if (innerSum > 0) return Infinity;
+      return 0;
+    });
+    const clusterCircles = d3
+      .select(svgRef.current)
+      .selectAll<SVGCircleElement, DagNode>('.nodes.clusters circle');
+    const groupRects = d3
+      .select(svgRef.current)
+      .selectAll<SVGRectElement, DagNode>('.nodes.groups rect');
     const inHighlightRange = (d: DagNode): boolean => {
       if (!highlightRange || d.type !== 'cluster' || d.clusterIndex == null) return false;
       if (highlightRange.groupId != null && d.groupId !== highlightRange.groupId) return false;
@@ -256,41 +375,96 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
       if (!Number.isFinite(ratio)) return highlightRange.max === Infinity && ratio === Infinity;
       return ratio >= highlightRange.min && (highlightRange.max === Infinity || ratio <= highlightRange.max);
     };
-    circles
+    const inSelectedGroup = (d: DagNode): boolean =>
+      selectedGroupId != null && d.type === 'cluster' && d.groupId === selectedGroupId;
+
+    const inGroupHighlightRange = (groupId: number | undefined): boolean => {
+      if (!groupHighlightRange || groupId == null) return false;
+      const ratio = groupRatios[groupId];
+      if (!Number.isFinite(ratio)) return groupHighlightRange.max === Infinity && ratio === Infinity;
+      return (
+        ratio >= groupHighlightRange.min &&
+        (groupHighlightRange.max === Infinity || ratio <= groupHighlightRange.max)
+      );
+    };
+
+    groupRects
       .attr('stroke', (d) => {
-        if (d.type === 'group')
-          return d.groupId === selectedGroupId ? '#f90' : '#888';
-        return inHighlightRange(d) ? '#fc0' : '#333';
+        if (d.groupId != null && inGroupHighlightRange(d.groupId)) return '#fc0';
+        if (d.groupId === selectedGroupId) return '#f90';
+        return '#888';
       })
       .attr('stroke-width', (d) => {
-        if (d.type === 'group' && d.groupId === selectedGroupId) return 2.5;
-        if (d.type === 'cluster' && inHighlightRange(d)) return 2.5;
+        if (d.groupId != null && inGroupHighlightRange(d.groupId)) return 2.5;
+        if (d.groupId === selectedGroupId) return 2.5;
+        return 1.2;
+      })
+      .attr('opacity', (d) => {
+        if (!groupHighlightRange) return 1;
+        return d.groupId != null && inGroupHighlightRange(d.groupId) ? 1 : 0.35;
+      });
+
+    clusterCircles
+      .attr('stroke', (d) => {
+        if (inSelectedGroup(d) || inHighlightRange(d)) return '#fc0';
+        return '#333';
+      })
+      .attr('stroke-width', (d) => {
+        if (inSelectedGroup(d) || inHighlightRange(d)) return 2.5;
         return 1;
       })
       .attr('opacity', (d) => {
         if (!highlightRange) return 1;
-        if (d.type === 'group') return 1;
         return inHighlightRange(d) ? 1 : 0.35;
       });
-  }, [hierarchy, selectedGroupId, highlightRange]);
+
+    // Highlight edges from clusters in the selected group to that group
+    const linkHighlight =
+      selectedGroupId != null
+        ? (d: DagLink) =>
+            d.linkType === 'cluster-group' &&
+            typeof d.source === 'object' &&
+            (d.source as DagNode).groupId === selectedGroupId
+        : () => false;
+    d3.select(svgRef.current)
+      .selectAll<SVGLineElement, DagLink>('.links line')
+      .attr('stroke', (d) => (linkHighlight(d) ? '#e85' : d.linkType === 'group-group' ? '#6a6a8a' : '#555'))
+      .attr('stroke-opacity', (d) => (linkHighlight(d) ? 1 : d.linkType === 'group-group' ? 0.8 : 0.6))
+      .attr('stroke-width', (d) => (linkHighlight(d) ? 2.5 : d.linkType === 'group-group' ? 1.5 : 1));
+  }, [hierarchy, selectedGroupId, highlightRange, groupHighlightRange]);
 
   return (
     <div className="view-container" data-view="dag">
       <h2>DAG Structure View</h2>
       <p className="view-description">
-        Nodes: clusters (colored by boundary ratio — green = better, red = worse) and groups (gray).
+        Nodes: clusters and groups colored by boundary ratio using a classic red→green scale.
         Edges: cluster → its group (groupId); group → group it was simplified from (refined).
       </p>
       <div className="dag-legend">
-        <span className="dag-legend-label">Boundary ratio (clusters):</span>
-        <span className="dag-legend-bad">low / bad</span>
-        <span
-          className="dag-legend-bar"
-          style={{
-            background: 'linear-gradient(to right, #c00, #0a0)',
-          }}
-        />
-        <span className="dag-legend-good">high / good</span>
+        <div className="dag-legend-row">
+          <span className="dag-legend-label">Cluster boundary ratio (red → green):</span>
+          <span className="dag-legend-bad">low / bad</span>
+          <span
+            className="dag-legend-bar"
+            style={{
+              background:
+                'linear-gradient(to right, #7F0000, #C00000, #FF8000, #A0FF00, #008000)',
+            }}
+          />
+          <span className="dag-legend-good">high / good</span>
+        </div>
+        <div className="dag-legend-row">
+          <span className="dag-legend-label">Group boundary ratio (red → green):</span>
+          <span className="dag-legend-bad">low / bad</span>
+          <span
+            className="dag-legend-bar"
+            style={{
+              background:
+                'linear-gradient(to right, #7F0000, #C00000, #FF8000, #A0FF00, #008000)',
+            }}
+          />
+          <span className="dag-legend-good">high / good</span>
+        </div>
       </div>
       <div
         ref={containerRef}
@@ -302,18 +476,48 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
 
       <div className="dag-stats">
         <section className="dag-stats-section">
-          <h3 className="dag-stats-title">Boundary ratio distribution (all clusters)</h3>
-          <BoundaryRatioHistogram
-            ratios={hierarchy.clusters.map(getBoundaryRatio)}
-            onBarClick={(min, max) => {
-              setHighlightRange((prev) =>
-                prev?.min === min && prev?.max === max && prev?.groupId === undefined
-                  ? null
-                  : { min, max }
-              );
-            }}
-            highlightRange={highlightRange?.groupId === undefined ? highlightRange : null}
-          />
+          <div className="dag-stats-row">
+            <div className="dag-stats-column">
+              <h3 className="dag-stats-title">Boundary ratio distribution (all clusters)</h3>
+              <BoundaryRatioHistogram
+                ratios={hierarchy.clusters.map(getBoundaryRatio)}
+                itemLabel="cluster"
+                onBarClick={(min, max) => {
+                  setHighlightRange((prev) =>
+                    prev?.min === min && prev?.max === max && prev?.groupId === undefined
+                      ? null
+                      : { min, max }
+                  );
+                }}
+                highlightRange={highlightRange?.groupId === undefined ? highlightRange : null}
+              />
+            </div>
+            <div className="dag-stats-column">
+              <h3 className="dag-stats-title">Boundary ratio distribution (all groups)</h3>
+              <BoundaryRatioHistogram
+                ratios={hierarchy.groups.map((_, gId) => {
+                  const groupClusters = hierarchy.clusters.filter((c) => c.groupId === gId);
+                  if (!groupClusters.length) return 0;
+                  let innerSum = 0;
+                  let outerSum = 0;
+                  for (const c of groupClusters) {
+                    innerSum += c.boundaryInner ?? 0;
+                    outerSum += c.boundaryOuter ?? 0;
+                  }
+                  if (outerSum > 0) return innerSum / outerSum;
+                  if (innerSum > 0) return Infinity;
+                  return 0;
+                })}
+                itemLabel="group"
+                onBarClick={(min, max) => {
+                  setGroupHighlightRange((prev) =>
+                    prev?.min === min && prev?.max === max ? null : { min, max }
+                  );
+                }}
+                highlightRange={groupHighlightRange}
+              />
+            </div>
+          </div>
         </section>
         {selectedGroupId == null && (
           <p className="dag-stats-hint">Click a group node to see its boundary ratio distribution. Click a bar to highlight clusters in that range.</p>
@@ -363,7 +567,13 @@ interface BoundaryRatioHistogramProps {
   highlightRange?: { min: number; max: number; groupId?: number } | null;
 }
 
-function BoundaryRatioHistogram({ ratios, groupId, onBarClick, highlightRange }: BoundaryRatioHistogramProps) {
+function BoundaryRatioHistogram({
+  ratios,
+  groupId,
+  onBarClick,
+  highlightRange,
+  itemLabel = 'cluster',
+}: BoundaryRatioHistogramProps & { itemLabel?: string }) {
   const { bins, counts } = histogramBins(ratios);
   const maxCount = Math.max(1, ...counts);
   const vbW = 100;
@@ -405,7 +615,8 @@ function BoundaryRatioHistogram({ ratios, groupId, onBarClick, highlightRange }:
               onClick={() => onBarClick?.(x0, x1, groupId)}
             >
               <title>
-                {formatAxisValue(x0)} – {x1 === Infinity ? '∞' : formatAxisValue(x1)} · {counts[i]} cluster{counts[i] === 1 ? '' : 's'}
+                {formatAxisValue(x0)} – {x1 === Infinity ? '∞' : formatAxisValue(x1)} · {counts[i]} {itemLabel}
+                {counts[i] === 1 ? '' : 's'}
               </title>
             </rect>
           );
