@@ -99,7 +99,7 @@ export default function App() {
               disabled={!canShowDag}
               onClick={() => setActiveView('dag')}
             >
-              DAG Structure View
+              2D DAG View
             </button>
             <button
               type="button"

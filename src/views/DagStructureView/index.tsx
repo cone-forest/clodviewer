@@ -25,6 +25,8 @@ interface DagNode {
   depth: number; // group depth: lower at bottom, higher toward top
   x?: number;
   y?: number;
+  fx?: number | null; // fixed position (set by d3-drag, cleared on release)
+  fy?: number | null;
   boundaryRatio?: number; // inner/outer; higher = better (green)
 }
 
@@ -91,6 +93,12 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
     min: number;
     max: number;
   } | null>(null);
+  const previousGroupPositionsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const isDraggingRef = useRef(false);
+
+  // Only re-run layout when selection changes in group-only mode (when visible nodes/links actually change).
+  const expandedGroupForLayout =
+    hierarchy.clusters.length > GROUP_ONLY_THRESHOLD ? selectedGroupId : null;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -116,6 +124,23 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
     const clusters = hierarchy.clusters;
     const { width, height } = dimensions;
 
+    // Reuse group positions when expanding in group-only mode (read before clearing SVG).
+    const prevPositions = new Map<number, { x: number; y: number }>();
+    const svgEl = svgRef.current;
+    if (svgEl) {
+      d3.select(svgEl)
+        .selectAll<SVGRectElement, DagNode>('.nodes.groups rect')
+        .each(function (this: SVGRectElement) {
+          const d = d3.select<SVGRectElement, DagNode>(this).datum();
+          if (d?.type === 'group' && d.groupId != null) {
+            const x = parseFloat(this.getAttribute('x') ?? '0') + 6;
+            const y = parseFloat(this.getAttribute('y') ?? '0') + 6;
+            prevPositions.set(d.groupId, { x, y });
+          }
+        });
+    }
+    previousGroupPositionsRef.current = prevPositions;
+
     const maxDepth = groups.length ? Math.max(...groups.map((g) => g.depth)) : 0;
     const padding = 60;
     const ySpan = height - 2 * padding;
@@ -135,13 +160,13 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
 
     const groupOnlyMode = clusters.length > GROUP_ONLY_THRESHOLD;
     const showClustersForGroup =
-      !groupOnlyMode || (selectedGroupId != null && selectedGroupId >= 0 && selectedGroupId < groups.length);
+      !groupOnlyMode || (expandedGroupForLayout != null && expandedGroupForLayout >= 0 && expandedGroupForLayout < groups.length);
     const visibleClusterIndices =
       !showClustersForGroup
         ? []
-        : groupOnlyMode && selectedGroupId != null
+        : groupOnlyMode && expandedGroupForLayout != null
           ? clusters
-              .map((c, i) => (c.groupId === selectedGroupId ? i : -1))
+              .map((c, i) => (c.groupId === expandedGroupForLayout ? i : -1))
               .filter((i) => i >= 0)
           : clusters.map((_, i) => i);
 
@@ -249,10 +274,23 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
       return groupColorScale(value);
     };
 
-    // Start with depth-ordered layout: low depth at bottom, high at top
+    // Start with depth-ordered layout; reuse previous positions when expanding in group-only mode.
+    const prevPos = previousGroupPositionsRef.current;
     nodes.forEach((n) => {
-      n.x = width / 2;
-      n.y = depthToY(n.depth);
+      const fallbackX = width / 2;
+      const fallbackY = depthToY(n.depth);
+      if (n.type === 'group' && n.groupId != null && prevPos.has(n.groupId)) {
+        const p = prevPos.get(n.groupId)!;
+        n.x = p.x;
+        n.y = p.y;
+      } else if (n.type === 'cluster' && n.groupId != null && prevPos.has(n.groupId)) {
+        const p = prevPos.get(n.groupId)!;
+        n.x = p.x;
+        n.y = p.y;
+      } else {
+        n.x = fallbackX;
+        n.y = fallbackY;
+      }
     });
 
     const simulation = d3
@@ -265,8 +303,8 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
           .distance((d) => (d.linkType === 'group-group' ? LINK_DISTANCE_GROUP_GROUP : LINK_DISTANCE_CLUSTER_GROUP))
       )
       .force('charge', d3.forceManyBody().strength(-120))
-      .force('x', d3.forceX(width / 2))
-      .force('y', d3.forceY((d: DagNode) => depthToY(d.depth)).strength(0.4))
+      .force('x', d3.forceX(width / 2).strength(0.05))
+      .force('y', d3.forceY((d: DagNode) => depthToY(d.depth)).strength(0.9))
       .force('collision', d3.forceCollide().radius(12));
 
     const svg = d3.select(svgRef.current);
@@ -311,10 +349,57 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
     });
 
     groupNode.on('click', (_event, d) => {
+      if (isDraggingRef.current) return;
       const gId = d.groupId;
       if (gId == null) return;
       setSelectedGroupIdRef.current((prev) => (prev === gId ? null : gId));
     });
+
+    const drag = d3
+      .drag<SVGRectElement, DagNode>()
+      .on('start', () => {
+        isDraggingRef.current = true;
+      })
+      .on('drag', (event, d) => {
+        d.x = event.x;
+        d.y = event.y;
+        d.fx = event.x;
+        d.fy = event.y;
+        const allNodes = simulation.nodes();
+        for (const node of allNodes) {
+          if (node.type === 'cluster' && node.groupId === d.groupId) {
+            node.x! += event.dx;
+            node.y! += event.dy;
+            node.fx = node.x;
+            node.fy = node.y;
+          }
+        }
+        // Update DOM directly during drag (no simulation.tick()) to avoid lag and ensure clusters move.
+        link
+          .attr('x1', (l) => (l.source as DagNode).x!)
+          .attr('y1', (l) => (l.source as DagNode).y!)
+          .attr('x2', (l) => (l.target as DagNode).x!)
+          .attr('y2', (l) => (l.target as DagNode).y!);
+        groupNode.attr('x', (n) => n.x! - 6).attr('y', (n) => n.y! - 6);
+        clusterNode.attr('cx', (n) => n.x!).attr('cy', (n) => n.y!);
+      })
+      .on('end', (_event, d) => {
+        d.fx = null;
+        d.fy = null;
+        const allNodes = simulation.nodes();
+        for (const node of allNodes) {
+          if (node.type === 'cluster' && node.groupId === d.groupId) {
+            node.fx = null;
+            node.fy = null;
+          }
+        }
+        simulation.alpha(0.3);
+        simulation.restart();
+        setTimeout(() => {
+          isDraggingRef.current = false;
+        }, 0);
+      });
+    groupNode.call(drag);
 
     const clusterNode = g
       .append('g')
@@ -359,7 +444,7 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
     return () => {
       simulation.stop();
     };
-  }, [hierarchy, dimensions, selectedGroupId]);
+  }, [hierarchy, dimensions, expandedGroupForLayout]);
 
   // Highlight selected group node, its cluster nodes and edges, and bar-selected clusters when selection changes
   useEffect(() => {
@@ -451,7 +536,7 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
 
   return (
     <div className="view-container" data-view="dag">
-      <h2>DAG Structure View</h2>
+      <h2>2D DAG View</h2>
       <p className="view-description">
         Nodes: clusters and groups colored by boundary ratio using a classic red→green scale.
         Edges: cluster → its group (groupId); group → group it was simplified from (refined).
