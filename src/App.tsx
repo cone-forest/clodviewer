@@ -5,8 +5,6 @@ import { ErrorTreemapView } from './views/ErrorTreemapView';
 import { GeneratorComparisonView } from './views/GeneratorComparisonView';
 import './App.css';
 
-const GENERATORS = ['clusterlod'] as const;
-
 function parseHierarchyJson(text: string): HierarchyJson {
   const raw = JSON.parse(text);
   return {
@@ -39,8 +37,6 @@ function loadFile(): Promise<string> {
 export default function App() {
   const [hierarchy, setHierarchy] = useState<HierarchyJson | null>(null);
   const [hierarchy2, setHierarchy2] = useState<HierarchyJson | null>(null);
-  const [generator, setGenerator] = useState<string>(GENERATORS[0]);
-  const [generator2, setGenerator2] = useState<string>(GENERATORS[0]);
   const [activeView, setActiveView] = useState<ViewId | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -76,7 +72,6 @@ export default function App() {
 
   const canShowDag = hierarchy != null;
   const canShowTreemap = hierarchy != null;
-  const canShowComparison = hierarchy != null && hierarchy2 != null;
 
   return (
     <div className="app">
@@ -89,14 +84,14 @@ export default function App() {
               {hierarchy ? `Loaded (${hierarchy.clusters.length} clusters)` : 'Load hierarchy JSON…'}
             </button>
           </div>
-          <div className="control-group">
-            <label>Generator</label>
-            <select value={generator} onChange={(e) => setGenerator(e.target.value)}>
-              {GENERATORS.map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
-          </div>
+          {activeView === 'comparison' && (
+            <div className="control-group">
+              <label>Hierarchy (right)</label>
+              <button type="button" onClick={handleLoadHierarchy2}>
+                {hierarchy2 ? `Loaded (${hierarchy2.clusters.length} clusters)` : 'Load hierarchy JSON…'}
+              </button>
+            </div>
+          )}
           <div className="view-buttons">
             <button
               type="button"
@@ -117,39 +112,12 @@ export default function App() {
             <button
               type="button"
               className={activeView === 'comparison' ? 'active' : ''}
-              disabled={!canShowComparison}
               onClick={() => setActiveView('comparison')}
             >
               Generator Comparison View
             </button>
           </div>
         </div>
-        {activeView === 'comparison' && (
-          <div className="comparison-load">
-            <div className="control-group">
-              <label>Left (lib1)</label>
-              <button type="button" onClick={handleLoadHierarchy}>
-                {hierarchy ? `${hierarchy.clusters.length} clusters` : 'Load…'}
-              </button>
-              <select value={generator} onChange={(e) => setGenerator(e.target.value)}>
-                {GENERATORS.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-            </div>
-            <div className="control-group">
-              <label>Right (lib2)</label>
-              <button type="button" onClick={handleLoadHierarchy2}>
-                {hierarchy2 ? `${hierarchy2.clusters.length} clusters` : 'Load…'}
-              </button>
-              <select value={generator2} onChange={(e) => setGenerator2(e.target.value)}>
-                {GENERATORS.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
         {loadError && <p className="error">{loadError}</p>}
       </header>
 
@@ -163,12 +131,12 @@ export default function App() {
         {activeView === 'treemap' && hierarchy && (
           <ErrorTreemapView hierarchy={hierarchy} />
         )}
-        {activeView === 'comparison' && hierarchy && hierarchy2 && (
+        {activeView === 'comparison' && (
           <GeneratorComparisonView
             hierarchy1={hierarchy}
             hierarchy2={hierarchy2}
-            generator1Label={generator}
-            generator2Label={generator2}
+            generator1Label="Left"
+            generator2Label="Right"
           />
         )}
       </main>
