@@ -4,7 +4,9 @@ import type { HierarchyJson, Cluster } from '../../types';
 import './DagStructureView.css';
 
 const HISTOGRAM_BINS = 14;
-const HISTOGRAM_HEIGHT = 72;
+
+/** Above this cluster count, show only groups by default; click a group to show its clusters. */
+const GROUP_ONLY_THRESHOLD = 1500;
 
 /** Link distance for cluster→group edges (compact). */
 const LINK_DISTANCE_CLUSTER_GROUP = 60;
@@ -131,6 +133,18 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
       }
     });
 
+    const groupOnlyMode = clusters.length > GROUP_ONLY_THRESHOLD;
+    const showClustersForGroup =
+      !groupOnlyMode || (selectedGroupId != null && selectedGroupId >= 0 && selectedGroupId < groups.length);
+    const visibleClusterIndices =
+      !showClustersForGroup
+        ? []
+        : groupOnlyMode && selectedGroupId != null
+          ? clusters
+              .map((c, i) => (c.groupId === selectedGroupId ? i : -1))
+              .filter((i) => i >= 0)
+          : clusters.map((_, i) => i);
+
     const nodes: DagNode[] = [];
     groups.forEach((_, i) => {
       const inner = groupInnerSum[i];
@@ -146,7 +160,8 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
         boundaryRatio: ratio,
       });
     });
-    clusters.forEach((c, i) => {
+    visibleClusterIndices.forEach((i) => {
+      const c = clusters[i];
       const ratio = getBoundaryRatio(c);
       nodes.push({
         id: `c${i}`,
@@ -159,13 +174,7 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
     });
 
     const links: DagLink[] = [];
-    // Cluster → group: each cluster belongs to a group; draw edge from cluster to that group.
-    clusters.forEach((c, i) => {
-      if (c.groupId >= 0 && c.groupId < groups.length) {
-        links.push({ source: `c${i}`, target: `g${c.groupId}`, linkType: 'cluster-group' });
-      }
-    });
-    // Group → parent group(s): each group G points to every group its clusters refine from (refined = source of simplification).
+    // Group → parent group(s) first so group-only view has no dangling refs.
     const groupParentAdded = new Set<string>();
     groups.forEach((_, gId) => {
       const parentIds = getGroupParentGroupIds(gId, clusters);
@@ -177,6 +186,12 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
             links.push({ source: `g${gId}`, target: `g${parentId}`, linkType: 'group-group' });
           }
         }
+      }
+    });
+    visibleClusterIndices.forEach((i) => {
+      const c = clusters[i];
+      if (c.groupId >= 0 && c.groupId < groups.length) {
+        links.push({ source: `c${i}`, target: `g${c.groupId}`, linkType: 'cluster-group' });
       }
     });
 
@@ -251,7 +266,7 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
       )
       .force('charge', d3.forceManyBody().strength(-120))
       .force('x', d3.forceX(width / 2))
-      .force('y', d3.forceY((d) => depthToY(d.depth)).strength(0.4))
+      .force('y', d3.forceY((d: DagNode) => depthToY(d.depth)).strength(0.4))
       .force('collision', d3.forceCollide().radius(12));
 
     const svg = d3.select(svgRef.current);
@@ -296,8 +311,9 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
     });
 
     groupNode.on('click', (_event, d) => {
-      if (d.groupId != null)
-        setSelectedGroupIdRef.current((prev) => (prev === d.groupId ? null : d.groupId));
+      const gId = d.groupId;
+      if (gId == null) return;
+      setSelectedGroupIdRef.current((prev) => (prev === gId ? null : gId));
     });
 
     const clusterNode = g
@@ -343,7 +359,7 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
     return () => {
       simulation.stop();
     };
-  }, [hierarchy, dimensions]);
+  }, [hierarchy, dimensions, selectedGroupId]);
 
   // Highlight selected group node, its cluster nodes and edges, and bar-selected clusters when selection changes
   useEffect(() => {
@@ -439,6 +455,8 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
       <p className="view-description">
         Nodes: clusters and groups colored by boundary ratio using a classic red→green scale.
         Edges: cluster → its group (groupId); group → group it was simplified from (refined).
+        {hierarchy.clusters.length > GROUP_ONLY_THRESHOLD &&
+          ' For large graphs only groups are shown; click a group to show its clusters.'}
       </p>
       <div className="dag-legend">
         <div className="dag-legend-row">
@@ -520,7 +538,11 @@ export function DagStructureView({ hierarchy }: DagStructureViewProps) {
           </div>
         </section>
         {selectedGroupId == null && (
-          <p className="dag-stats-hint">Click a group node to see its boundary ratio distribution. Click a bar to highlight clusters in that range.</p>
+          <p className="dag-stats-hint">
+            Click a group node to see its boundary ratio distribution
+            {hierarchy.clusters.length > GROUP_ONLY_THRESHOLD && ' and to show its clusters in the graph'}
+            . Click a bar to highlight clusters in that range.
+          </p>
         )}
         {selectedGroupId != null && selectedGroupId < hierarchy.groups.length && (
           <section className="dag-stats-section dag-stats-group">
