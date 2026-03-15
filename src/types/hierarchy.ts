@@ -36,4 +36,4 @@ export interface HierarchyJson {
   clusters: Cluster[];
 }
 
-export type ViewId = 'dag' | 'treemap' | 'comparison';
+export type ViewId = 'dag' | 'dag3d' | 'treemap' | 'comparison';

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { HierarchyJson, ViewId } from './types';
 import { DagStructureView } from './views/DagStructureView';
+import { Dag3dView } from './views/Dag3dView';
 import { ErrorTreemapView } from './views/ErrorTreemapView';
 import { GeneratorComparisonView } from './views/GeneratorComparisonView';
 import './App.css';
@@ -103,6 +104,14 @@ export default function App() {
             </button>
             <button
               type="button"
+              className={activeView === 'dag3d' ? 'active' : ''}
+              disabled={!canShowDag}
+              onClick={() => setActiveView('dag3d')}
+            >
+              3D DAG View
+            </button>
+            <button
+              type="button"
               className={activeView === 'treemap' ? 'active' : ''}
               disabled={!canShowTreemap}
               onClick={() => setActiveView('treemap')}
@@ -127,6 +136,9 @@ export default function App() {
         )}
         {activeView === 'dag' && hierarchy && (
           <DagStructureView hierarchy={hierarchy} />
+        )}
+        {activeView === 'dag3d' && hierarchy && (
+          <Dag3dView hierarchy={hierarchy} />
         )}
         {activeView === 'treemap' && hierarchy && (
           <ErrorTreemapView hierarchy={hierarchy} />
