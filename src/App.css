@@ -202,3 +202,106 @@
   margin: 0 0 0.5rem 0;
   font-size: 1rem;
 }
+
+.view-below {
+  margin-top: 1rem;
+}
+
+.hierarchy-summary {
+  padding: 1rem;
+  margin-top: 0.5rem;
+  background: #0f0f1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #ccc;
+}
+
+.hierarchy-summary-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.hierarchy-summary-meta {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.hierarchy-summary-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.hierarchy-summary-levels {
+  flex: 1 1 260px;
+}
+
+.hierarchy-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.hierarchy-summary-table th,
+.hierarchy-summary-table td {
+  padding: 0.25rem 0.4rem;
+  border-bottom: 1px solid #222;
+}
+
+.hierarchy-summary-table th {
+  text-align: left;
+  font-weight: 600;
+  color: #ddd;
+}
+
+.hierarchy-summary-table th:nth-child(1),
+.hierarchy-summary-table td:nth-child(1) {
+  width: 10%;
+}
+
+.hierarchy-summary-table th:nth-child(2),
+.hierarchy-summary-table td:nth-child(2) {
+  width: 15%;
+}
+
+.hierarchy-summary-table th:nth-child(3),
+.hierarchy-summary-table td:nth-child(3) {
+  width: 20%;
+}
+
+.hierarchy-summary-table th:nth-child(4),
+.hierarchy-summary-table td:nth-child(4) {
+  width: auto;
+}
+
+.hierarchy-summary-lod {
+  flex: 1 1 200px;
+}
+
+.hierarchy-summary-lod-chart {
+  width: 100%;
+  display: block;
+}
+
+.hierarchy-summary-occupancy {
+  width: 100%;
+  height: 20px;
+  display: block;
+}
+
+.hierarchy-summary-boundary {
+  margin-top: 0.75rem;
+}
+
+.hierarchy-summary-boundary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.hierarchy-summary-boundary-col {
+  flex: 1 1 220px;
+}

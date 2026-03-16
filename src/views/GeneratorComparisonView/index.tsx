@@ -2,12 +2,15 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { renderComparison, DEFAULT_RENDER_SIZE } from './renderDiff';
 import { buildLodMesh, getMaxError } from './lodMesh';
 import type { HierarchyJson } from '../../types';
+import type { HierarchyStats } from '../../types/hierarchyStats';
+import { HierarchySummaryPanel } from '../../components/HierarchySummaryPanel';
 
 interface GeneratorComparisonViewProps {
   hierarchy1: HierarchyJson | null;
   hierarchy2: HierarchyJson | null;
   generator1Label: string;
   generator2Label: string;
+  stats: HierarchyStats | null;
 }
 
 function getMesh(h: HierarchyJson | null): { vertices: [number, number, number][]; indices: number[] } | null {
@@ -24,6 +27,7 @@ export function GeneratorComparisonView({
   hierarchy2,
   generator1Label,
   generator2Label,
+  stats,
 }: GeneratorComparisonViewProps) {
   const leftRef = useRef<HTMLCanvasElement>(null);
   const rightRef = useRef<HTMLCanvasElement>(null);
@@ -89,6 +93,9 @@ export function GeneratorComparisonView({
       <div className="view-container" data-view="comparison">
         <h2>Generator Comparison View</h2>
         <p className="view-description">Load a hierarchy JSON for the left panel above, then use &quot;Load hierarchy JSON&quot; for the right panel.</p>
+        {stats && hierarchy1 && (
+          <HierarchySummaryPanel hierarchy={hierarchy1} stats={stats} />
+        )}
       </div>
     );
   }
@@ -104,6 +111,9 @@ export function GeneratorComparisonView({
               ? 'Load a hierarchy for the right panel (second button in the bar).'
               : 'Both hierarchy files must include mesh data (vertices and indices) for comparison.'}
         </p>
+        {stats && hierarchy1 && (
+          <HierarchySummaryPanel hierarchy={hierarchy1} stats={stats} />
+        )}
       </div>
     );
   }
@@ -178,6 +188,11 @@ export function GeneratorComparisonView({
           />
         </div>
       </div>
+      {stats && hierarchy1 && (
+        <div className="view-below">
+          <HierarchySummaryPanel hierarchy={hierarchy1} stats={stats} />
+        </div>
+      )}
     </div>
   );
 }

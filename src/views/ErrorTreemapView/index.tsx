@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import type { HierarchyJson, Cluster, Group } from '../../types';
+import type { HierarchyStats } from '../../types/hierarchyStats';
+import { HierarchySummaryPanel } from '../../components/HierarchySummaryPanel';
 
 const MIN_RECT_FOR_LABEL = 36; // min width/height to show cluster id
 const TREEMAP_HEIGHT = 500;
@@ -18,6 +20,7 @@ interface TreemapNode {
 
 interface ErrorTreemapViewProps {
   hierarchy: HierarchyJson;
+  stats: HierarchyStats | null;
 }
 
 function clusterError(c: Cluster): number {
@@ -181,7 +184,7 @@ function buildTreemap(
   return { minErr, maxErr };
 }
 
-export function ErrorTreemapView({ hierarchy }: ErrorTreemapViewProps) {
+export function ErrorTreemapView({ hierarchy, stats }: ErrorTreemapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -208,6 +211,11 @@ export function ErrorTreemapView({ hierarchy }: ErrorTreemapViewProps) {
       <div ref={containerRef} className="treemap-container" style={{ width: '100%', maxWidth: '100%' }}>
         <svg ref={svgRef} style={{ display: 'block' }} />
       </div>
+      {stats && (
+        <div className="view-below">
+          <HierarchySummaryPanel hierarchy={hierarchy} stats={stats} />
+        </div>
+      )}
     </div>
   );
 }

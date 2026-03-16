@@ -3,6 +3,8 @@ import * as d3 from 'd3';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { HierarchyJson, Cluster } from '../../types';
+import type { HierarchyStats } from '../../types/hierarchyStats';
+import { HierarchySummaryPanel } from '../../components/HierarchySummaryPanel';
 import './Dag3dView.css';
 
 /** Above this cluster count, show only groups by default; click a group to show its clusters. */
@@ -40,6 +42,7 @@ interface DagLink {
 
 interface Dag3dViewProps {
   hierarchy: HierarchyJson;
+  stats: HierarchyStats | null;
 }
 
 function getBoundaryRatio(c: Cluster): number {
@@ -64,7 +67,7 @@ function hexToRgb(hex: string): [number, number, number] {
   return [c.r, c.g, c.b];
 }
 
-export function Dag3dView({ hierarchy }: Dag3dViewProps) {
+export function Dag3dView({ hierarchy, stats }: Dag3dViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
@@ -532,6 +535,12 @@ export function Dag3dView({ hierarchy }: Dag3dViewProps) {
       <div className="dag3d-canvas-wrap" ref={containerRef}>
         <canvas ref={canvasRef} className="dag3d-canvas" />
       </div>
+
+      {stats && (
+        <div className="view-below">
+          <HierarchySummaryPanel hierarchy={hierarchy} stats={stats} />
+        </div>
+      )}
     </div>
   );
 }

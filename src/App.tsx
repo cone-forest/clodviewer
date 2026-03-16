@@ -1,9 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { HierarchyJson, ViewId } from './types';
+import type { HierarchyStats } from './types/hierarchyStats';
 import { DagStructureView } from './views/DagStructureView';
 import { Dag3dView } from './views/Dag3dView';
 import { ErrorTreemapView } from './views/ErrorTreemapView';
 import { GeneratorComparisonView } from './views/GeneratorComparisonView';
+import { HierarchySummaryPanel } from './components/HierarchySummaryPanel';
+import { computeHierarchyStats } from './utils/hierarchyStats';
 import './App.css';
 
 function parseHierarchyJson(text: string): HierarchyJson {
@@ -40,6 +43,11 @@ export default function App() {
   const [hierarchy2, setHierarchy2] = useState<HierarchyJson | null>(null);
   const [activeView, setActiveView] = useState<ViewId | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const stats: HierarchyStats | null = useMemo(
+    () => (hierarchy ? computeHierarchyStats(hierarchy) : null),
+    [hierarchy]
+  );
 
   const handleLoadHierarchy = useCallback(async () => {
     setLoadError(null);
@@ -131,17 +139,26 @@ export default function App() {
       </header>
 
       <main className="shell-main">
-        {activeView == null && (
-          <p className="placeholder">Choose a view above to analyze the hierarchy.</p>
+        {hierarchy == null && (
+          <p className="placeholder">Load a hierarchy JSON above to begin.</p>
         )}
-        {activeView === 'dag' && hierarchy && (
-          <DagStructureView hierarchy={hierarchy} />
+        {hierarchy != null && activeView == null && (
+          <HierarchySummaryPanel hierarchy={hierarchy} stats={stats} />
         )}
-        {activeView === 'dag3d' && hierarchy && (
-          <Dag3dView hierarchy={hierarchy} />
+        {hierarchy != null && activeView === 'dag' && (
+          <>
+            <DagStructureView hierarchy={hierarchy} stats={stats} />
+          </>
         )}
-        {activeView === 'treemap' && hierarchy && (
-          <ErrorTreemapView hierarchy={hierarchy} />
+        {hierarchy != null && activeView === 'dag3d' && (
+          <>
+            <Dag3dView hierarchy={hierarchy} stats={stats} />
+          </>
+        )}
+        {hierarchy != null && activeView === 'treemap' && (
+          <>
+            <ErrorTreemapView hierarchy={hierarchy} stats={stats} />
+          </>
         )}
         {activeView === 'comparison' && (
           <GeneratorComparisonView
@@ -149,6 +166,7 @@ export default function App() {
             hierarchy2={hierarchy2}
             generator1Label="Left"
             generator2Label="Right"
+            stats={stats}
           />
         )}
       </main>
