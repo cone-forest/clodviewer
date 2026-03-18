@@ -1,5 +1,3 @@
-import React from 'react';
-
 const HISTOGRAM_BINS = 14;
 
 export interface BoundaryRatioHistogramProps {

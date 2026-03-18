@@ -236,7 +236,8 @@
 }
 
 .hierarchy-summary-levels {
-  flex: 1 1 260px;
+  flex: 1 1 420px;
+  min-width: 0;
 }
 
 .hierarchy-summary-table {
@@ -273,8 +274,47 @@
 }
 
 .hierarchy-summary-table th:nth-child(4),
-.hierarchy-summary-table td:nth-child(4) {
-  width: auto;
+.hierarchy-summary-table td:nth-child(4),
+.hierarchy-summary-table th:nth-child(5),
+.hierarchy-summary-table td:nth-child(5) {
+  width: 22%;
+  min-width: 72px;
+}
+
+.hierarchy-summary-occupancy-note {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #888;
+  max-width: 52rem;
+}
+
+.hierarchy-summary-lod-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  color: #bbb;
+}
+
+.hierarchy-summary-lod-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hierarchy-summary-lod-toggle input {
+  accent-color: #7e57c2;
+}
+
+.hierarchy-summary-lod-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
 .hierarchy-summary-lod {

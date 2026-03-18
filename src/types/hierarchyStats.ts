@@ -9,16 +9,25 @@ export interface PerLevelStats {
    * key = triangles per cluster, value = number of clusters with that triangle count.
    */
   occupancyDistribution: Record<number, number>;
+  /**
+   * Vertex occupancy: key = vertexCount per cluster, value = number of clusters.
+   */
+  vertexOccupancyDistribution: Record<number, number>;
 }
 
 export interface LodProgressionPoint {
   depth: number;
   clusterCount: number;
+  triangleCount: number;
   /**
    * Cluster count at this depth divided by the cluster count at the initial (finest) depth.
    * 1.0 for the initial depth, smaller for coarser levels.
    */
   ratioToInitial: number;
+  /**
+   * Triangle sum at this depth divided by triangle sum at the initial (finest) depth.
+   */
+  triangleRatioToInitial: number;
 }
 
 export interface BoundaryRatioSummary {

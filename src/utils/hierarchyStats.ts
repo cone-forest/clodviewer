@@ -57,7 +57,7 @@ function computePerLevelStats(hierarchy: HierarchyJson): {
   const depthToClusters = new Map<number, Cluster[]>();
   const depthToGroups = new Map<number, Group[]>();
 
-  groups.forEach((g, gid) => {
+  groups.forEach((g) => {
     const list = depthToGroups.get(g.depth);
     if (list) {
       list.push(g);
@@ -89,11 +89,15 @@ function computePerLevelStats(hierarchy: HierarchyJson): {
     const clusterCount = levelClusters.length;
     let triangleCount = 0;
     const occupancyDistribution: Record<number, number> = Object.create(null);
+    const vertexOccupancyDistribution: Record<number, number> = Object.create(null);
     for (const c of levelClusters) {
       const tris = trianglesForCluster(c);
       triangleCount += tris;
-      const key = tris | 0;
-      occupancyDistribution[key] = (occupancyDistribution[key] ?? 0) + 1;
+      const triKey = tris | 0;
+      occupancyDistribution[triKey] = (occupancyDistribution[triKey] ?? 0) + 1;
+      const vtxKey = c.vertexCount | 0;
+      vertexOccupancyDistribution[vtxKey] =
+        (vertexOccupancyDistribution[vtxKey] ?? 0) + 1;
     }
     totalClusters += clusterCount;
     totalTriangles += triangleCount;
@@ -102,6 +106,7 @@ function computePerLevelStats(hierarchy: HierarchyJson): {
       clusterCount,
       triangleCount,
       occupancyDistribution,
+      vertexOccupancyDistribution,
     };
   });
 
@@ -113,13 +118,20 @@ function computePerLevelStats(hierarchy: HierarchyJson): {
 function computeLodProgression(levels: PerLevelStats[]): LodProgressionPoint[] {
   if (!levels.length) return [];
   const initialClusterCount = levels[0].clusterCount || 1;
+  const initialTriangleCount = levels[0].triangleCount;
   return levels.map((level) => {
     const ratioToInitial =
       initialClusterCount > 0 ? level.clusterCount / initialClusterCount : 0;
+    const triangleRatioToInitial =
+      initialTriangleCount > 0
+        ? level.triangleCount / initialTriangleCount
+        : 0;
     return {
       depth: level.depth,
       clusterCount: level.clusterCount,
+      triangleCount: level.triangleCount,
       ratioToInitial,
+      triangleRatioToInitial,
     };
   });
 }
